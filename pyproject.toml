@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "photo-viewer"
+version = "0.1.0"
+description = "Gallery for iPhone photos with Live Photo playback and one-click import from the device."
+requires-python = ">=3.12"
+dependencies = [
+    "PySide6>=6.7",
+    "pillow>=10.3",
+    "pillow-heif>=0.16",
+    "opencv-python-headless>=4.9",
+    "numpy>=1.26",
+    "comtypes>=1.4; sys_platform == 'win32'",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.5"]
+
+[project.gui-scripts]
+photo-viewer = "photo_viewer.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+ignore = ["RUF001"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/photo_viewer/ui/theme.py" = ["E501"]
