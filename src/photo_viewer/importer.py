@@ -2,6 +2,7 @@ import os
 import time
 from collections import deque
 from collections.abc import Callable
+from contextlib import suppress
 from enum import Enum, auto
 from pathlib import Path
 
@@ -19,11 +20,13 @@ _QUIET_TROUBLE_S = 8.0
 _MAX_FILE_ATTEMPTS = 5
 _EXTRA_POLLS_PER_ATTEMPT = 4
 _MAX_RELISTS_PER_FOLDER = 5
+_MAX_WRONG_DATA_IN_A_ROW = 3
 _UNRESPONSIVE_AFTER_FOLDERS = 3
 _SCAN_REPORT_EVERY = 25
 
 _PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 _QUICKTIME_BRAND = b"qt  "
+_HEIF_BRANDS = (b"heic", b"heix", b"hevc", b"mif1", b"msf1")
 
 
 class _Cancelled(Exception):
@@ -42,6 +45,10 @@ class _StaleListing(Exception):
         self.name = name
 
 
+class _DeviceServesWrongData(Exception):
+    """Several files in a row came back as other files' data: the iPhone's own mapping is broken."""
+
+
 class _Outcome(Enum):
     COPIED = auto()
     SKIPPED = auto()
@@ -56,6 +63,8 @@ def _looks_like(name: str, head: bytes) -> bool:
             return head[:2] == b"\xff\xd8"
         case ".png":
             return head[:8] == _PNG_SIGNATURE
+        case ".mov" | ".mp4" | ".m4v":
+            return not (head[4:8] == b"ftyp" and head[8:12] in _HEIF_BRANDS)
         case _:
             return True
 
@@ -84,6 +93,7 @@ class ImportThread(QThread):
         self._shown_fraction = 0.0
         self._trouble_since: float | None = None
         self._announced = False
+        self._last_good: str | None = None
 
     def run(self) -> None:
         try:
@@ -94,6 +104,8 @@ class ImportThread(QThread):
                     self._close_phone()
         except _Cancelled:
             pass
+        except _DeviceServesWrongData:
+            self.failed.emit(tr("import.wrong_data"))
         except (IPhoneNotFoundError, OSError) as error:
             self.failed.emit(str(error))
 
@@ -106,7 +118,7 @@ class ImportThread(QThread):
         self._take_inventory(plan, object_count)
         self._publish_counts()
 
-        copied = skipped = 0
+        copied = skipped = wrong_data_streak = 0
         for folder, object_ids in plan:
             pending = deque(object_ids)
             relists = 0
@@ -118,6 +130,9 @@ class ImportThread(QThread):
                     self._unreadable.append(f"{folder.name}/{object_id}")
                     self._file_finished()
                 except _StaleListing as stale:
+                    wrong_data_streak += 1
+                    if wrong_data_streak == _MAX_WRONG_DATA_IN_A_ROW:
+                        raise _DeviceServesWrongData from stale
                     if relists == _MAX_RELISTS_PER_FOLDER:
                         self._unreadable.append(f"{folder.name}/{stale.name}")
                         self._file_finished()
@@ -130,6 +145,7 @@ class ImportThread(QThread):
                     copied += outcome is _Outcome.COPIED
                     skipped += outcome is _Outcome.SKIPPED
                     if outcome is _Outcome.COPIED:
+                        wrong_data_streak = 0
                         self._file_finished()
         self.imported.emit(copied, skipped, self._unreadable)
 
@@ -221,8 +237,8 @@ class ImportThread(QThread):
                 continue
             return
 
-    def _announce_persistent_trouble(self) -> None:
-        if not self._announced and time.monotonic() - self._trouble_since >= _QUIET_TROUBLE_S:
+    def _announce_persistent_trouble(self, force: bool = False) -> None:
+        if not self._announced and (force or time.monotonic() - self._trouble_since >= _QUIET_TROUBLE_S):
             self._announced = True
             self.paused.emit(tr("import.paused"))
 
@@ -239,7 +255,23 @@ class ImportThread(QThread):
                 return self._transfer(folder, object_id)
             except comtypes.COMError:
                 self._wait_for_device(patience=attempt * _EXTRA_POLLS_PER_ATTEMPT)
+                self._wait_until_reads_work()
         raise _Unreadable
+
+    def _wait_until_reads_work(self) -> None:
+        """If a file that was copied fine a moment ago cannot be read now, the iPhone is the problem
+        (locked or busy), not the file: wait, tell the user, and do not blame the current file."""
+        while self._last_good is not None and not self._can_read(self._last_good):
+            self._announce_persistent_trouble(force=True)
+            self._sleep(_POLLS_BETWEEN_RECONNECTS)
+            with suppress(comtypes.COMError, IPhoneNotFoundError):
+                self._connect()
+
+    def _can_read(self, object_id: str) -> bool:
+        try:
+            return bool(next(iter(self._phone.read(self._phone.describe(object_id))), b"x"))
+        except comtypes.COMError:
+            return False
 
     def _transfer(self, folder: DeviceFolder, object_id: str) -> _Outcome:
         file = self._phone.describe(object_id)
@@ -260,6 +292,7 @@ class ImportThread(QThread):
             return _Outcome.CANCELLED
         partial.replace(target)
         os.utime(target, (file.modified, file.modified))
+        self._last_good = object_id
         return _Outcome.COPIED
 
     def _write(self, file: DeviceFile, partial: Path) -> bool:

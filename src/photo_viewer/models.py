@@ -15,6 +15,7 @@ class MediaItem:
     path: Path
     live_video: Path | None
     taken_at: float
+    size: int
 
     @property
     def name(self) -> str:

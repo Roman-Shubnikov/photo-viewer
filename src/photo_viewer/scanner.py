@@ -31,11 +31,14 @@ def _build_item(paths: list[Path]) -> MediaItem:
     video = _preferred([p for p in paths if p.suffix.lower() in VIDEO_SUFFIXES])
     primary = still or video
     kind = MediaKind.VIDEO if still is None else MediaKind.LIVE if video else MediaKind.PHOTO
+    live_video = video if kind is MediaKind.LIVE else None
+    stat = primary.stat()
     return MediaItem(
         kind=kind,
         path=primary,
-        live_video=video if kind is MediaKind.LIVE else None,
-        taken_at=primary.stat().st_mtime,
+        live_video=live_video,
+        taken_at=stat.st_mtime,
+        size=stat.st_size + (live_video.stat().st_size if live_video else 0),
     )
 
 

@@ -1,9 +1,10 @@
-from pathlib import PureWindowsPath
+from pathlib import Path
 
-from photo_viewer.explorer import explorer_command
+import pytest
+
+from photo_viewer.explorer import reveal_in_explorer
 
 
-def test_path_with_spaces_and_commas_is_quoted_for_explorer():
-    path = PureWindowsPath(r"G:\iphone photos\202603_a\IMG_1,2.HEIC")
-
-    assert explorer_command(path) == r'explorer /select,"G:\iphone photos\202603_a\IMG_1,2.HEIC"'
+def test_missing_file_raises_instead_of_opening_a_random_folder(tmp_path):
+    with pytest.raises(OSError):
+        reveal_in_explorer(Path(tmp_path / "does not exist.jpg"))

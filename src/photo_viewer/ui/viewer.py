@@ -190,6 +190,7 @@ class _LiveState(Enum):
 class ViewerWindow(QDialog):
     def __init__(self, items: list[MediaItem], row: int, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self.setWindowTitle(tr("viewer.title"))
         self.setStyleSheet(f"QDialog {{ background: {BACKGROUND.name()}; }}")
         self._items = items
@@ -257,8 +258,13 @@ class ViewerWindow(QDialog):
                 super().keyPressEvent(event)
 
     def done(self, result: int) -> None:
-        self._player.stop()
+        self._release_media()
         super().done(result)
+
+    def _release_media(self) -> None:
+        """Lets go of the video file, otherwise Windows refuses to delete or move it."""
+        self._player.stop()
+        self._player.setSource(QUrl())
 
     def _build_transport(self) -> QWidget:
         self._play_button = self._make_button("▶", self._toggle_pause)
@@ -316,7 +322,7 @@ class ViewerWindow(QDialog):
         self._caption.setText(f"{item.name}   ·   {row + 1} / {len(self._items)}")
         self._live_button.setVisible(item.kind is MediaKind.LIVE)
         self._transport.setVisible(item.kind is MediaKind.VIDEO)
-        self._player.stop()
+        self._release_media()
         self._canvas.clear_video()
         self._live_state = _LiveState.IDLE
 

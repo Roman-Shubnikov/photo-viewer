@@ -18,6 +18,8 @@ QMenu::item:selected { background: #2a2d34; }
 QSlider::groove:horizontal { height: 4px; background: #343841; border-radius: 2px; }
 QSlider::sub-page:horizontal { background: #4c8dff; border-radius: 2px; }
 QSlider::handle:horizontal { background: #e8e9ec; width: 12px; margin: -4px 0; border-radius: 6px; }
+QComboBox { background: #25272d; color: #e8e9ec; border: 1px solid #343841; border-radius: 6px; padding: 4px 10px; }
+QComboBox QAbstractItemView { background: #1c1e23; color: #e8e9ec; selection-background-color: #2a2d34; }
 QListView { background: #121316; border: none; outline: none; }
 QStatusBar { background: #1c1e23; color: #8b8f98; }
 QPushButton { background: #2a2d34; color: #e8e9ec; border: none; border-radius: 6px; padding: 8px 16px; }

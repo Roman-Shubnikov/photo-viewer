@@ -73,6 +73,13 @@ class ShiftedPhone(FakePhone):
             yield CONTENT
 
 
+class AlwaysWrongDataPhone(FakePhone):
+    """Every request is answered with another file's data, in every session."""
+
+    def read(self, file: DeviceFile):
+        yield b"\x00\x00\x00\x14ftypqt  " + b"v" * 400
+
+
 @pytest.fixture
 def qt_app():
     return QCoreApplication.instance() or QCoreApplication([])
@@ -192,3 +199,15 @@ def test_progress_of_a_resumed_import_starts_where_it_left_off(qt_app, tmp_path,
     assert fractions[0] == pytest.approx(2 / 3, abs=0.01)
     assert fractions[-1] == pytest.approx(1.0)
     assert fractions == sorted(fractions)
+
+
+def test_import_stops_with_a_clear_message_when_the_device_keeps_sending_wrong_data(
+    qt_app, tmp_path, monkeypatch
+):
+    events = run_import(monkeypatch, tmp_path, AlwaysWrongDataPhone)
+
+    assert events["imported"] == []
+    assert len(events["failed"]) == 1
+    assert "Restart the iPhone" in events["failed"][0] or "Перезагрузите" in events["failed"][0]
+    assert copied_files(tmp_path) == {}
+    assert not list(tmp_path.rglob("*.part"))

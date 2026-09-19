@@ -68,3 +68,13 @@ def test_non_media_files_are_ignored(tmp_path, name):
     touch(tmp_path, name)
 
     assert scan_folder(tmp_path) == []
+
+
+def test_item_size_includes_the_live_video(tmp_path):
+    (tmp_path / "IMG_0010.HEIC").write_bytes(b"x" * 100)
+    (tmp_path / "IMG_0010.MOV").write_bytes(b"x" * 40)
+    (tmp_path / "IMG_0011.HEIC").write_bytes(b"x" * 70)
+
+    sizes = {item.name: item.size for item in scan_folder(tmp_path)}
+
+    assert sizes == {"IMG_0010.HEIC": 140, "IMG_0011.HEIC": 70}

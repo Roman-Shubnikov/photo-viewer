@@ -30,6 +30,11 @@ _TEXTS: dict[str, tuple[str, str]] = {
     ),
     "main.empty_folder": ("No photos or videos found in {folder}", "В папке {folder} нет фото и видео"),
     "main.summary": ("Items: {total} · Live Photos: {live}", "Элементов: {total} · Live Photos: {live}"),
+    "sort.label": ("Sort by", "Сортировка"),
+    "sort.newest": ("Date: newest first", "Дата: сначала новые"),
+    "sort.oldest": ("Date: oldest first", "Дата: сначала старые"),
+    "sort.largest": ("Size: largest first", "Размер: сначала большие"),
+    "sort.smallest": ("Size: smallest first", "Размер: сначала маленькие"),
     "viewer.title": ("Viewer", "Просмотр"),
     "viewer.loading": ("Loading…", "Загрузка…"),
     "viewer.cannot_display": ("This file cannot be displayed", "Не удаётся показать этот файл"),
@@ -72,6 +77,14 @@ _TEXTS: dict[str, tuple[str, str]] = {
     "import.counts": (
         "Files ready: {done} of {total} · {left} left · {size} to go",
         "Готово файлов: {done} из {total} · осталось {left} · ещё {size}",
+    ),
+    "import.wrong_data": (
+        "The iPhone is sending data that belongs to other files, so nothing was saved for them.\n"
+        "Restart the iPhone (or unplug and replug the cable) and start the import again — "
+        "files that are already copied will be skipped.",
+        "iPhone отдаёт данные, которые принадлежат другим файлам, поэтому для них ничего не сохранено.\n"
+        "Перезагрузите iPhone (или переподключите кабель) и запустите импорт заново — "
+        "уже скопированные файлы будут пропущены.",
     ),
     "import.paused": (
         "Import paused: the iPhone stopped responding. Unlock it — the import will resume automatically.\n"

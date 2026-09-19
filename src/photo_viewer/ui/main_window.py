@@ -3,6 +3,7 @@ from pathlib import Path
 from PySide6.QtCore import QModelIndex, QPoint, QSettings, QStandardPaths, Qt, QTimer
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
+    QComboBox,
     QFileDialog,
     QLabel,
     QMainWindow,
@@ -18,8 +19,9 @@ from PySide6.QtWidgets import (
 
 from photo_viewer.explorer import reveal_in_explorer
 from photo_viewer.i18n import tr, translator
-from photo_viewer.models import MediaKind
+from photo_viewer.models import MediaItem, MediaKind
 from photo_viewer.scanner import scan_folder
+from photo_viewer.sorting import SortOrder, sort_items
 from photo_viewer.thumbnails import ThumbnailCache
 from photo_viewer.ui.gallery import TILE_DEFAULT, TILE_MAX, TILE_MIN, GalleryModel, GalleryView
 from photo_viewer.ui.import_dialog import ImportDialog
@@ -27,6 +29,13 @@ from photo_viewer.ui.viewer import ViewerWindow
 
 _LIBRARY_KEY = "library/folder"
 _IMPORT_KEY = "import/folder"
+_SORT_KEY = "gallery/sort"
+_SORT_TEXTS = {
+    SortOrder.NEWEST: "sort.newest",
+    SortOrder.OLDEST: "sort.oldest",
+    SortOrder.LARGEST: "sort.largest",
+    SortOrder.SMALLEST: "sort.smallest",
+}
 
 
 class MainWindow(QMainWindow):
@@ -35,6 +44,7 @@ class MainWindow(QMainWindow):
         self.resize(1200, 800)
         self._settings = QSettings()
         self._folder: Path | None = None
+        self._scanned: list[MediaItem] = []
 
         cache_dir = Path(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.CacheLocation))
         self._thumbnails = ThumbnailCache(cache_dir / "thumbnails")
@@ -90,7 +100,7 @@ class MainWindow(QMainWindow):
         return page
 
     def _build_toolbar(self) -> None:
-        toolbar = QToolBar()
+        toolbar = self._toolbar = QToolBar()
         toolbar.setMovable(False)
         self.addToolBar(toolbar)
 
@@ -104,6 +114,11 @@ class MainWindow(QMainWindow):
         self._language_action.triggered.connect(translator.toggle)
         toolbar.addAction(self._open_action)
         toolbar.addAction(self._import_action)
+        toolbar.addSeparator()
+        self._sort_label = QLabel()
+        self._sort_label.setObjectName("muted")
+        toolbar.addWidget(self._sort_label)
+        toolbar.addWidget(self._build_sort_combo())
 
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
@@ -117,13 +132,37 @@ class MainWindow(QMainWindow):
         slider.valueChanged.connect(self._gallery.set_tile_size)
         toolbar.addWidget(slider)
 
+    def _build_sort_combo(self) -> QComboBox:
+        self._sort_combo = QComboBox()
+        for order in SortOrder:
+            self._sort_combo.addItem("", order)
+        saved = self._settings.value(_SORT_KEY, SortOrder.NEWEST.name, type=str)
+        self._sort_combo.setCurrentIndex(max(self._sort_combo.findData(SortOrder[saved]), 0))
+        self._sort_combo.currentIndexChanged.connect(self._on_sort_changed)
+        return self._sort_combo
+
+    def _on_sort_changed(self) -> None:
+        self._settings.setValue(_SORT_KEY, self._sort_order().name)
+        self._apply_sort()
+
+    def _sort_order(self) -> SortOrder:
+        return self._sort_combo.currentData()
+
+    def _apply_sort(self) -> None:
+        self._model.set_items(sort_items(self._scanned, self._sort_order()))
+        self._gallery.scrollToTop()
+
     def _retranslate(self) -> None:
+        self._sort_label.setText(tr("sort.label"))
+        for index in range(self._sort_combo.count()):
+            self._sort_combo.setItemText(index, tr(_SORT_TEXTS[self._sort_combo.itemData(index)]))
         self._open_action.setText(tr("main.open_folder"))
         self._import_action.setText(tr("main.import"))
         self._language_action.setText(tr("language.switch"))
         self._open_button.setText(tr("main.open_folder"))
         self._import_button.setText(tr("main.import"))
         self._empty_title.setText(tr("main.empty_title"))
+        self._toolbar.layout().invalidate()
         self._refresh_folder_texts()
 
     def _refresh_folder_texts(self) -> None:
@@ -149,7 +188,8 @@ class MainWindow(QMainWindow):
     def _load_folder(self, folder: Path) -> None:
         self._settings.setValue(_LIBRARY_KEY, str(folder))
         self._folder = folder
-        self._model.set_items(scan_folder(folder))
+        self._scanned = scan_folder(folder)
+        self._model.set_items(sort_items(self._scanned, self._sort_order()))
         self._refresh_folder_texts()
         if self._model.items:
             self._pages.setCurrentWidget(self._gallery)
